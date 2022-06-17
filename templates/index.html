@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mint Tool</title>
+    <!--     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">-->
+    <link rel="stylesheet" type="text/css" href="../static/style.css">
+
+</head>
+<body onload="getGas()">
+<div class="side-bar">
+    <div class="sider-bar-sub">
+        <label class="white setting">设置</label>
+        <div class="input-element">
+            <label class="label">RPC链接</label>
+            <button id="test-connection" class="btn" onclick="testConnection()" value="测试链接">连接RPC</button>
+            <label class="status" id="rpc-status"></label>
+            <div>
+                <input id="rpc-url" class="input-box"
+                       value="">
+            </div>
+        </div>
+
+        <div class="input-element">
+            <label class="label">交易哈希</label>
+            <button class="btn" onclick="parseTx()">一键解析</button>
+            <label class="status" id="parse-tx-status"></label>
+            <div>
+                <input id="tx_hash" class="input-box"
+                       value="">
+            </div>
+        </div>
+
+        <div class="input-element">
+            <label class="label">合约地址</label>
+            <div>
+                <input id="contract_address" class="input-box" value="">
+            </div>
+        </div>
+
+        <div class="two-col">
+            <div class="input-element row">
+                <label class="label">ETH数量</label>
+                <div>
+                    <input id="eth_value" class="input-box minor-inputbox" value="">
+                </div>
+            </div>
+            <div class="input-element row right">
+                <label class="label">Gas Limit</label>
+                <div>
+                    <input id="gas_limit" class="input-box minor-inputbox" value="">
+                </div>
+            </div>
+        </div>
+        <div id="from" hidden></div>
+        <div class="two-col">
+            <div class="input-element row">
+                <label class="label">Max Fee</label>
+                <div>
+                    <input id="max_fee" class="input-box minor-inputbox" value="">
+                </div>
+            </div>
+            <div class="input-element row right">
+                <label class="label">Max Priority Fee</label>
+                <div>
+                    <input id="max_priority_fee" class="input-box minor-inputbox" value="">
+                </div>
+            </div>
+        </div>
+
+        <div class="input-element">
+            <label class="label">Hex数据</label>
+            <div>
+                <input id="input_data" class="input-box input-box" value="">
+            </div>
+        </div>
+
+        <div>
+            <button class="larger-btn" id="sendtx" onclick="sendTx()">发送交易</button>
+        </div>
+
+    </div>
+</div>
+<div style="height: 40px">
+    <label class="white gas" id="gasfee"></label>
+    <label class="gas gas-fast" id="gasfee-fast"></label>
+    <label class="gas gas-medium" id="gasfee-medium"></label>
+    <label class="gas gas-slow" id="gasfee-slow"></label>
+</div>
+<div class="file-uploader" id="file-uploader">
+    <p class="white center" id="file-uploader-p">请拖拽钱包至此上传</p>
+    <input type="file" hidden>
+</div>
+<div class="monitor-box">
+    <div class="monitor-box-etherscan">
+        <label class="monitor-label">EtherScan API</label>
+        <input class="etherscan-api-input-box" id="etherscan_api_key" value="">
+        <label class="monitor-label" style="margin-left: 10px">监控合约地址</label>
+        <input class="etherscan-api-input-box" id="monitor_contract_address"
+               value="">
+        <button class="btn monitor-btn" onclick="getViewFunctions()">获取合约函数</button>
+    </div>
+    <div class="monitor-box-sub">
+        <label class="monitor-label">监控合约函数</label>
+        <select class="select-box" id="monitor-function-names">
+
+        </select>
+        <label class="monitor-inverval-label">时间间隔</label>
+        <input class="monitor-interval-input-box" id="monitor-interval" value="1.0">
+        <label class="monitor-inverval-label">函数返回值</label>
+        <input class="monitor-interval-input-box" id="monitor-func-value" value="" readonly>
+        <button class="btn start-monitor-btn" onclick="startMonitor()">开始监控</button>
+        <button class="btn stop-monitor-btn" onclick="stopMonitor()">停止监控</button>
+    </div>
+</div>
+<div class="table-area">
+    <table id="table">
+        <thead>
+        <tr>
+            <th>序号</th>
+            <th colspan="2">地址</th>
+            <th colspan="2">私钥</th>
+            <th>余额</th>
+            <th>nonce</th>
+            <th>状态</th>
+        </tr>
+        </thead>
+        <tbody id="tbody">
+        </tbody>
+    </table>
+
+</div>
+<script>
+    let monitorContractSetIntervalId = null
+
+    function getViewFunctions() {
+        let ethApiKey = document.getElementById("etherscan_api_key").value
+        let monitorContractAddress = document.getElementById("monitor_contract_address").value
+        getViewFunctionsCallback = (request) => {
+            if (request.response.success === true) {
+                let functionNames = request.response.function_names
+                let selectBox = document.getElementById("monitor-function-names")
+                for (let i = 0; i < functionNames.length; i++) {
+                    let option = document.createElement('option')
+                    option.innerHTML = functionNames[i]
+                    selectBox.appendChild(option)
+                }
+            } else {
+                console.log("get view functions error, code is not open sourced")
+            }
+        }
+        let url = `/getviewfunctions?etherscan_api_key=${ethApiKey}&monitor_contract_address=${monitorContractAddress}`
+        sendRequest(url, "GET", [], getViewFunctionsCallback)
+
+    }
+
+    function startMonitor() {
+        let monitorInterval = Number(document.getElementById("monitor-interval").value) * 1000
+        let monitorContractAddress = document.getElementById("monitor_contract_address").value
+        let selectBox = document.getElementById("monitor-function-names")
+        let monitorFunctionName = selectBox.options[selectBox.selectedIndex].text
+        startMonitorCallback = (request) => {
+            if (request.response.success === true) {
+                document.getElementById("monitor-func-value").value = request.response.func_value
+            }
+        }
+        for (var i = 0; i < selectBox.length; i++) {
+            selectBox.remove(i);
+        }
+
+        url = `/getviewfunctionvalue?monitor_contract_address=${monitorContractAddress}&monitor_function_name=${monitorFunctionName}`
+        func = () => {
+            sendRequest(url, "GET", [], startMonitorCallback)
+        }
+        monitorContractSetIntervalId = setInterval(func, monitorInterval)
+    }
+
+    function stopMonitor() {
+        clearInterval(monitorContractSetIntervalId)
+    }
+
+    window.addEventListener('pywebviewready', function () {
+        var container = document.getElementById('pywebview-status')
+        container.innerHTML = '<i>pywebview</i> is ready'
+        document.getElementById('input_data').value = "ready"
+    })
+
+
+    var fileUploader = document.getElementById('file-uploader')
+
+    fileUploader.addEventListener("dragenter", function (e) {  //拖进
+        fileUploader.classList.add('drophover')
+        e.preventDefault()
+    })
+    fileUploader.addEventListener("dragover", function (e) {  //拖来拖去
+        fileUploader.classList.add('drophover')
+        e.preventDefault()
+    })
+    fileUploader.addEventListener("dragleave", function (e) {  //拖来拖去
+        fileUploader.classList.remove('drophover')
+        e.preventDefault()
+    })
+    fileUploader.addEventListener('drop', function (event) {
+        event.preventDefault()
+        let fileList = [].slice.call(event.dataTransfer.files);
+        let file = fileList[0]
+        let reader = new FileReader()
+        reader.readAsText(file)
+        upLoadWalletsCallback = (uploadRequest) => {
+            if (uploadRequest.response.success === true) {
+                document.getElementById('file-uploader-p').innerHTML = "文件上传成功"
+                document.getElementById('file-uploader').classList.remove('upload-fail')
+                document.getElementById('file-uploader').classList.add('upload-success')
+                removeWallets()
+                showWallets(uploadRequest.response.wallets)
+
+            } else {
+                document.getElementById('file-uploader-p').innerHTML = "文件上传失败:" + uploadRequest.response.reason
+                document.getElementById('file-uploader').classList.remove('upload-success')
+                document.getElementById('file-uploader').classList.add('upload-fail')
+            }
+        }
+        reader.onload = () => {
+            sendRequest("/uploadwallets", "POST", [["wallets", reader.result]], upLoadWalletsCallback)
+        }
+    })
+
+    function sendTx() {
+        let contractAddress = document.getElementById("contract_address").value
+        let ethValue = document.getElementById("eth_value").value
+        let gasLimit = document.getElementById("gas_limit").value
+        let maxFee = document.getElementById("max_fee").value
+        let maxPriorityFee = document.getElementById("max_priority_fee").value
+        let inputData = document.getElementById("input_data").value
+        let from = document.getElementById("from").value
+
+        let tx = {
+            "to": contractAddress,
+            "value": ethValue,
+            "gas": gasLimit,
+            "maxFeePerGas": maxFee,
+            "maxPriorityFeePerGas": maxPriorityFee,
+            "input": inputData,
+            "from": from
+        }
+        sendTxCallback = (request) => {
+            let urls = request.response.urls
+            let table = document.getElementById("table")
+            let length = table.rows.length
+            for (let i = 1; i < length; i++) {
+                console.log(urls[i])
+                table.rows[i].cells[4].innerHTML = Number(table.rows[i].cells[4].innerHTML) + 1
+                table.rows[i].cells[5].innerHTML = urls[i - 1]
+            }
+        }
+        sendRequest("/sendtx", "POST", [["tx", JSON.stringify(tx)]], sendTxCallback)
+    }
+
+    function removeWallets() {
+        let table = document.getElementById("table")
+        let length = table.rows.length
+        for (let i = 1; i < length; i++) {
+            table.deleteRow(length - i)
+        }
+    }
+
+    function showWallets(wallets) {
+        let tbody = document.getElementById("tbody")
+        for (let i = 0; i < wallets.length; i++) {
+            let tr = document.createElement("tr")
+            tr.innerHTML = `<td class=\"index\">${i + 1}</td>\n` +
+                `<td class=\"address\" colspan=\"2\">${wallets[i]["address"]}</td>\n` +
+                `<td class=\"private\" colspan=\"2\">${wallets[i]["private_key"]}</td>\n` +
+                `<td class=\"balance\">${wallets[i]["balance"]}</td>\n` +
+                `<td class=\"nonce\">${wallets[i]["nonce"]}</td>\n` +
+                "<td class=\"tx-status\">无任务</td>"
+            tbody.appendChild(tr)
+        }
+    }
+
+    function getGas() {
+        let gasFeeLabel = document.getElementById("gasfee")
+        gasFeeLabel.innerHTML = "当前gas: Max Fee/ Max Priority Fee"
+        getGasCallback = (request) => {
+            let gasFastLabel = document.getElementById("gasfee-fast")
+            let gasMediumLabel = document.getElementById("gasfee-medium")
+            let gasSlowLabel = document.getElementById("gasfee-slow")
+            let gasFee = request.response.gasfee
+
+            gasFastLabel.innerHTML = `快:${gasFee.fast.max_fee}/${gasFee.fast.max_priority_fee}`
+            gasMediumLabel.innerHTML = `中:${gasFee.medium.max_fee}/${gasFee.medium.max_priority_fee}`
+            gasSlowLabel.innerHTML = `慢:${gasFee.slow.max_fee}/${gasFee.slow.max_priority_fee}`
+        }
+        sendRequest("/getgas", "GET", [[]], getGasCallback)
+        func = () => {
+            sendRequest("/getgas", "GET", [[]], getGasCallback)
+        }
+        setInterval(func, 5000)
+    }
+
+    function testConnection() {
+        let rpc = document.getElementById("rpc-url").value
+        testConnCallback = (request) => {
+            if (request.response.connected === true) {
+                document.getElementById("rpc-status").classList.remove('fail')
+                document.getElementById("rpc-status").classList.add('success')
+                document.getElementById("parse-tx-status").classList.remove('fail')
+                document.getElementById("parse-tx-status").classList.add('success')
+                document.getElementById("rpc-status").innerHTML = '连接成功'
+                document.getElementById("parse-tx-status").innerHTML = ''
+            } else {
+                document.getElementById("rpc-status").classList.remove('success')
+                document.getElementById("rpc-status").classList.add('fail')
+                document.getElementById("rpc-status").innerHTML = '连接失败'
+            }
+        }
+        sendRequest("/testconnection", "POST", [["rpc", rpc]], testConnCallback)
+    }
+
+    function sendRequest(url, method, data, callback) {
+        let formData = new FormData()
+        for (let i = 0; i < data.length; i++) {
+            formData.append(data[i][0], data[i][1])
+        }
+        let request = new XMLHttpRequest()
+        request.responseType = 'json'
+        request.open(method, url, true)
+        request.onload = () => {
+            console.log(request.response)
+            callback(request)
+        }
+        request.send(formData)
+    }
+
+    function parseTx() {
+        let txHash = document.getElementById("tx_hash").value
+        parseTxCallback = (request) => {
+            if (!request.response.connected) {
+                document.getElementById("parse-tx-status").classList.remove('success')
+                document.getElementById("parse-tx-status").classList.add('fail')
+                document.getElementById("parse-tx-status").innerHTML = 'RPC连接失败, 请检查RPC'
+                return null
+            }
+            if (request.response.success) {
+                document.getElementById("parse-tx-status").classList.remove('fail')
+                document.getElementById("parse-tx-status").classList.add('success')
+                document.getElementById("parse-tx-status").innerHTML = '解析成功'
+                document.getElementById("contract_address").value = request.response.to
+                document.getElementById("input_data").value = request.response.input
+                document.getElementById("eth_value").value = request.response.value
+                document.getElementById("gas_limit").value = request.response.gas
+                document.getElementById("max_fee").value = request.response.max_fee
+                document.getElementById("from").value = request.response.from
+                document.getElementById("max_priority_fee").value = request.response.max_priority_fee
+            } else {
+                document.getElementById("parse-tx-status").classList.remove('success')
+                document.getElementById("parse-tx-status").classList.add('fail')
+                document.getElementById("parse-tx-status").innerHTML = '解析失败, 请手动填写参数'
+            }
+        }
+        sendRequest("/parsetxhash", "POST", [["tx_hash", txHash]], parseTxCallback)
+    }
+
+</script>
+</body>
+</html>

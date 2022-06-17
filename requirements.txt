@@ -1,0 +1,4 @@
+aiohttp==3.7.4.post0
+Flask==1.1.2
+web3==5.22.0
+webview==0.1.5
