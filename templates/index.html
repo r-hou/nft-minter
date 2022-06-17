@@ -17,7 +17,7 @@
             <label class="status" id="rpc-status"></label>
             <div>
                 <input id="rpc-url" class="input-box"
-                       value="">
+                       value="https://summer-cool-smoke.quiknode.pro/15400fe46e690ee7558a3163aad5434eb9934099/">
             </div>
         </div>
 
@@ -27,7 +27,7 @@
             <label class="status" id="parse-tx-status"></label>
             <div>
                 <input id="tx_hash" class="input-box"
-                       value="">
+                       value="0x2dfb3c9a63206d0ac309d03e8f64d5a5dc2c75c6ea7590c03272f903cd6647fc">
             </div>
         </div>
 
@@ -94,10 +94,10 @@
 <div class="monitor-box">
     <div class="monitor-box-etherscan">
         <label class="monitor-label">EtherScan API</label>
-        <input class="etherscan-api-input-box" id="etherscan_api_key" value="">
+        <input class="etherscan-api-input-box" id="etherscan_api_key" value="QXFW5N35JZIJIX8P53C3RW5S2NYSH8UYNR">
         <label class="monitor-label" style="margin-left: 10px">监控合约地址</label>
         <input class="etherscan-api-input-box" id="monitor_contract_address"
-               value="">
+               value="0xcc3591a24924f8405d84ecf3c5fa199ff00ea581">
         <button class="btn monitor-btn" onclick="getViewFunctions()">获取合约函数</button>
     </div>
     <div class="monitor-box-sub">
@@ -134,6 +134,10 @@
     let monitorContractSetIntervalId = null
 
     function getViewFunctions() {
+        let selectBox = document.getElementById("monitor-function-names")
+        for (var i = 0; i < selectBox.length; i++) {
+            selectBox.remove(i);
+        }
         let ethApiKey = document.getElementById("etherscan_api_key").value
         let monitorContractAddress = document.getElementById("monitor_contract_address").value
         getViewFunctionsCallback = (request) => {
@@ -149,24 +153,31 @@
                 console.log("get view functions error, code is not open sourced")
             }
         }
+
         let url = `/getviewfunctions?etherscan_api_key=${ethApiKey}&monitor_contract_address=${monitorContractAddress}`
         sendRequest(url, "GET", [], getViewFunctionsCallback)
 
     }
 
     function startMonitor() {
+        if(monitorContractSetIntervalId != null){
+            stopMonitor()
+        }
+
+
         let monitorInterval = Number(document.getElementById("monitor-interval").value) * 1000
         let monitorContractAddress = document.getElementById("monitor_contract_address").value
         let selectBox = document.getElementById("monitor-function-names")
         let monitorFunctionName = selectBox.options[selectBox.selectedIndex].text
+
+
+
         startMonitorCallback = (request) => {
             if (request.response.success === true) {
                 document.getElementById("monitor-func-value").value = request.response.func_value
             }
         }
-        for (var i = 0; i < selectBox.length; i++) {
-            selectBox.remove(i);
-        }
+
 
         url = `/getviewfunctionvalue?monitor_contract_address=${monitorContractAddress}&monitor_function_name=${monitorFunctionName}`
         func = () => {
@@ -177,6 +188,7 @@
 
     function stopMonitor() {
         clearInterval(monitorContractSetIntervalId)
+        monitorContractSetIntervalId = null
     }
 
     window.addEventListener('pywebviewready', function () {
